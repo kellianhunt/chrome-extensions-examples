@@ -6,14 +6,17 @@
     "background",
     "tts",
     "alarms",
-    "storage"
+    "storage",
+    "audioCapture",
+    "audio",
+    "tabs"
   ],
 
   "background": {
     "scripts": [
+      "third-party/annyang.min.js",
       "common.js",
-      "background.js",
-      "third-party/annyang.min.js"
+      "background.js"
     ]
   },
 
