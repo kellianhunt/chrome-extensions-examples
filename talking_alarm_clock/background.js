@@ -60,7 +60,6 @@ function addMessageListeners() {
     console.log("Got an alarm!", alarm);
     var date = new Date(alarm.scheduledTime);
     ringingAlarms[alarm] = true;
-    alert("ALARM");
     ringAlarm(date.getHours(), date.getMinutes());
   });
 }
@@ -95,31 +94,23 @@ chrome.runtime.onInstalled.addListener(function(details) {
   });
 });
 
+var offCommand = function() {
+  console.log("received OFF command");
+  stopAll();
+}
+
+
 if (annyang) {
   // Let's define our first command. First the text we expect, and then the function it should call
-  var sayThis = function(repeat) {
-    speak(repeat);
+  var commands = {
+    'off': offCommand
   }
 
-  var commands = {
-    'off': function() {
-      stopAll();
-
-      console.log("received off command");
-      for (var alarm in ringingAlarms) {
-        chrome.alarms.clear(alarm, function(wasCleared) {
-          console.log("Alarm " + alarm + " was deleted = " + wasCleared);
-        });
-      }
-
-      alert("STOPPED!");
-    },
-    '*repeat': sayThis
-  };
   annyang.debug();
   // Add our commands to annyang
+  // annyang.addCommands(commands);
   annyang.addCommands(commands);
-  annyang.init(commands);
+
   // Start listening. You can call this here, or attach this call to an event, button, etc.
   annyang.start();
   console.log("annyang voice recognition initialized");
