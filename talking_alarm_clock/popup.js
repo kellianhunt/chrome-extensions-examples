@@ -8,6 +8,7 @@ var blankClockAnim2Image;
 var animationTimer;
 var currentClockImage;
 var port;
+var alarmCount = 1;
 
 function updateEnabledStatus(alarm) {
   var enabled = $('a' + alarm + '_on').checked;
@@ -188,6 +189,170 @@ function addOutlineStyleListeners() {
   }, true);
 }
 
+function createNewAlarm() {
+  var newAlarm = jQuery("#alarm-template").clone(true);
+  newAlarm.attr("id","alarm-" + alarmCount);
+
+  newAlarm.show();
+  alarmCount++;
+  return newAlarm;
+}
+
+function getAlarmTimes() {
+  var timeArray = [];
+  jQuery('input.alarm-time').each(function() {
+    timeArray.push(this.value);
+  });
+  return timeArray;
+}
+
+function getClosestAlarm(alarmField) {
+  return jQuery(alarmField).closest('.alarm')
+}
+
+function getClosestAlarmTime(alarmField) {
+  console.log(jQuery(alarmField).closest('.alarm-time'));
+  return jQuery(alarmField).closest('.alarm-time')
+}
+
+function initializeAlarmList() {
+  //chrome.storage.sync.clear();
+  chrome.storage.sync.get(['alarm_count', 'alarm_list', 'alarm_times'], function(result) {
+    console.log(result.alarm_count);
+    if (result.alarm_list == null) {
+      console.log("it was undefined");
+      var newAlarm = createNewAlarm();
+      jQuery("#alarm-list").append(newAlarm);
+      var listHTML = jQuery("#alarm-list").html();
+      chrome.storage.sync.set({
+        'alarm_count': 1,
+        'alarm_list': listHTML,
+        'alarm_times': [jQuery(".alarm-time").val()]
+      }, function() {
+        console.log("Alarm list HTML successfully initialized.");
+      });
+    } else {
+      alarmCount = result.alarm_count;
+      var listHTML = result.alarm_list;
+      var times = result.alarm_times;
+
+      jQuery("#alarm-list").html(listHTML);
+      jQuery(".alarm-time").each(function(index, alarm) {
+        console.log("::" + times[index] + "::");
+        alarm.value = times[index];
+        if (times[index] != null && times[index] != "") {
+          getClosestAlarm(jQuery(alarm)).find('.alarm-toggle').removeClass('disabled');
+        }
+      });
+    }
+
+    jQuery('button.alarm-toggle').click(function(){
+      if(jQuery(this).hasClass('disabled')) {
+        return false;
+      }
+      jQuery(this).toggleClass("active");
+      chrome.storage.sync.set({
+        'alarm_list': jQuery("#alarm-list").html(),
+        'alarm_count': alarmCount
+      }, function() {
+        // Notify that we saved.
+        console.log('Alarm successfully added');
+      });
+
+
+      if (jQuery(this).hasClass('active')) {
+        var alarm_id = getClosestAlarm(this).attr('id');
+        console.log(alarm_id);
+        console.log(jQuery('#' + alarm_id + ' .alarm-time'));
+
+        chrome.runtime.sendMessage({
+          msg: "activate_alarm",
+          alarm_id: alarm_id,
+          alarm_time: jQuery('#' + alarm_id + ' .alarm-time').val()
+        });
+      } else {
+        var alarm_id = getClosestAlarm(this).attr('id');
+        chrome.runtime.sendMessage({
+          msg: "delete_alarm",
+          alarm_id: alarm_id,
+          alarm_time: jQuery('#' + alarm_id + ' .alarm-time').val()
+        });
+      }
+
+      return false;
+    });
+
+    jQuery('button.alarm-delete').click(function() {
+      var alarm_id = getClosestAlarm(jQuery(this)).attr('id');
+      if (jQuery('#' + alarm_id + ' .alarm-toggle').hasClass('active')) {
+        chrome.runtime.sendMessage({
+          msg: "delete_alarm",
+          alarm_id: alarm_id,
+          alarm_time: jQuery('#' + alarm_id + ' .alarm-time').val()
+        });
+      }
+
+      jQuery(this).closest('.alarm').remove();
+
+      chrome.storage.sync.set({
+        'alarm_list': jQuery("#alarm-list").html(),
+        'alarm_count': alarmCount,
+        'alarm_times': getAlarmTimes()
+      }, function() {
+        // Notify that we saved.
+        console.log('Alarm successfully deleted');
+      });
+
+      return false;
+    });
+
+    jQuery('button.alarm-create').click(function() {
+      var newAlarm = createNewAlarm();
+      jQuery("#alarm-list").append(newAlarm);
+
+      chrome.storage.sync.set({
+        'alarm_list': jQuery("#alarm-list").html(),
+        'alarm_count': alarmCount
+      }, function() {
+        // Notify that we saved.
+        console.log('Alarm successfully added');
+      });
+
+      return false;
+    });
+
+    jQuery('input.alarm-time').on('input', function() {
+      var timeArray = getAlarmTimes();
+
+      chrome.storage.sync.set({
+        'alarm_list': jQuery("#alarm-list").html(),
+        'alarm_times': timeArray
+      }, function() {
+        // Notify that we saved.
+        console.log('Alarm successfully changed');
+      });
+
+      var alarm_id = getClosestAlarm(this).attr('id');
+      var toggle_button = jQuery('#' + alarm_id + ' .alarm-toggle');
+      if (jQuery(this).val() != "") {
+        toggle_button.removeClass('disabled');
+      } else {
+        toggle_button.addClass('disabled');
+      }
+
+      if (toggle_button.hasClass('active')) {
+        chrome.runtime.sendMessage({
+          msg: "activate_alarm",
+          alarm_id: alarm_id,
+          alarm_time: jQuery('#' + alarm_id + ' .alarm-time').val()
+        });
+      }
+
+      return false;
+    });
+  });
+}
+
 function load() {
   try {
     port = chrome.runtime.connect();
@@ -214,7 +379,7 @@ function load() {
     }
 
     timeElement.valueAsNumber =
-        timeElement.valueAsNumber % (12 * 60 * 60 * 1000);
+    timeElement.valueAsNumber % (12 * 60 * 60 * 1000);
     if (timeElement.valueAsNumber < (1 * 60 * 60 * 1000))
       timeElement.valueAsNumber += (12 * 60 * 60 * 1000);
     return true;
@@ -237,95 +402,7 @@ function load() {
     }
   }, false);
 
-  // Alarm 1
-
-  var a1_tt = localStorage['a1_tt'] || DEFAULT_A1_TT;
-  $('a1_tt').value = a1_tt;
-  $('a1_tt').addEventListener('input', function(evt) {
-    updateEnabledStatus(1);
-    if (!updateTime($('a1_tt'))) {
-      evt.stopPropagation();
-      return false;
-    }
-    localStorage['a1_tt'] = $('a1_tt').value;
-    updateEnabledStatus(1);
-    return true;
-  }, false);
-  $('a1_tt').addEventListener('change', function(evt) {
-    if ($('a1_tt').value.length == 4 &&
-        parseTime('0' + $('a1_tt').value)) {
-      $('a1_tt').value = '0' + $('a1_tt').value;
-    }
-    if (!updateTime($('a1_tt'))) {
-      evt.stopPropagation();
-      return false;
-    }
-    localStorage['a1_tt'] = $('a1_tt').value;
-    updateEnabledStatus(1);
-    return true;
-  }, false);
-
-  var a1_on = (localStorage['a1_on'] == 'true');
-  $('a1_on').checked = a1_on;
-  $('a1_on').addEventListener('change', function(evt) {
-    window.setTimeout(function() {
-      localStorage['a1_on'] = $('a1_on').checked;
-      updateEnabledStatus(1);
-    }, 0);
-  }, false);
-
-  var a1_ampm = localStorage['a1_ampm'] || DEFAULT_A1_AMPM;
-  $('a1_ampm').selectedIndex = a1_ampm;
-  $('a1_ampm').addEventListener('change', function(evt) {
-    localStorage['a1_ampm'] = $('a1_ampm').selectedIndex;
-  }, false);
-
-  updateEnabledStatus(1);
-
-  // Alarm 2
-
-  var a2_tt = localStorage['a2_tt'] || DEFAULT_A2_TT;
-  $('a2_tt').value = a2_tt;
-  $('a2_tt').addEventListener('input', function(evt) {
-    updateEnabledStatus(2);
-    if (!updateTime($('a2_tt'))) {
-      evt.stopPropagation();
-      return false;
-    }
-    localStorage['a2_tt'] = $('a2_tt').value;
-    updateEnabledStatus(2);
-    return true;
-  }, false);
-  $('a2_tt').addEventListener('change', function(evt) {
-    if ($('a2_tt').value.length == 4 &&
-        parseTime('0' + $('a2_tt').value)) {
-      $('a2_tt').value = '0' + $('a2_tt').value;
-    }
-    if (!updateTime($('a2_tt'))) {
-      evt.stopPropagation();
-      return false;
-    }
-    localStorage['a2_tt'] = $('a2_tt').value;
-    updateEnabledStatus(2);
-    return true;
-  }, false);
-
-  var a2_on = (localStorage['a2_on'] == 'true');
-  $('a2_on').checked = a2_on;
-  $('a2_on').addEventListener('change', function(evt) {
-    window.setTimeout(function() {
-      localStorage['a2_on'] = $('a2_on').checked;
-      updateEnabledStatus(2);
-    }, 0);
-  }, false);
-
-  var a2_ampm = localStorage['a2_ampm'] || DEFAULT_A2_AMPM;
-  $('a2_ampm').selectedIndex = a2_ampm;
-  $('a2_ampm').addEventListener('change', function(evt) {
-    localStorage['a2_ampm'] = $('a2_ampm').selectedIndex;
-  }, false);
-
-  updateEnabledStatus(2);
+  initializeAlarmList();
 
   // Phrase
 

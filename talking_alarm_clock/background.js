@@ -4,12 +4,8 @@
  * found in the LICENSE file.
  */
 
-var a1Timer = null;
-var a2Timer = null;
-var port = null;
 var iconFlashTimer = null;
-
-var HOUR_MS = 1000 * 60 * 60;
+var ringingAlarms = {};
 
 // Override from common.js
 window.stopFlashingIcon = function() {
@@ -37,90 +33,80 @@ window.flashIcon = function() {
   flash();
 };
 
-function setTimer(alarmHours, alarmMinutes) {
-  var alarmTime = (alarmHours * 60 + alarmMinutes) * 60 * 1000;
-  var d = new Date();
-  var now = d.getHours() * HOUR_MS +
-            d.getMinutes() * 60 * 1000 +
-            d.getSeconds() * 1000;
-  var delta = (alarmTime - now);
+function addMessageListeners() {
+  chrome.runtime.onMessage.addListener(
+      function(request, sender, sendResponse) {
+        if (request.msg === "delete_alarm") {
+          var alarm_id = request.alarm_id;
+          chrome.alarms.clear(alarm_id, function(wasCleared) {
+            console.log("Alarm " + alarm_id + " was deleted = " + wasCleared);
+          });
+        }
+        if (request.msg === "activate_alarm") {
+          var alarm_id = request.alarm_id;
+          var alarm_time = request.alarm_time;
+          var hour_minute = alarm_time.split(":");
+          var hours = parseInt(hour_minute[0]);
+          var mins = parseInt(hour_minute[1]);
+          var time_since_epoch = timeToEpoch(hours, mins);
 
-  if (delta >= -5000 && delta < 1000) {
-    ringAlarm(alarmHours, alarmMinutes);
-    if (port) {
-      port.postMessage({'cmd': 'anim'});
-    }
-    return null;
-  }
+          console.log("Alarm " + alarm_id + " has been activated for " + time_since_epoch.toLocaleString());
+          chrome.alarms.create(alarm_id, {when: time_since_epoch.getTime()});   //, periodInMinutes: 1});
+        }
+      }
+  );
 
-  if (delta < 0) {
-    delta += HOUR_MS * 24;
-  }
-  if (delta >= 1000) {
-    if (delta > HOUR_MS) {
-      delta = HOUR_MS;
-    }
-    console.log('Timer set for ' + delta + ' ms');
-    return window.setTimeout(resetTimers, delta);
-  }
-
-  return null;
-};
-
-function resetTimers() {
-  if (a1Timer) {
-    window.clearTimeout(a1Timer);
-  }
-
-  try {
-    var a1_on = (localStorage['a1_on'] == 'true');
-    var a1_tt = localStorage['a1_tt'] || DEFAULT_A1_TT;
-    var a1_ampm = localStorage['a1_ampm'] || DEFAULT_A1_AMPM;
-    if (a1_on) {
-      var alarmHoursMinutes = parseTime(a1_tt, a1_ampm);
-      var alarmHours = alarmHoursMinutes[0];
-      var alarmMinutes = alarmHoursMinutes[1];
-      a1Timer = setTimer(alarmHours, alarmMinutes);
-    }
-  } catch (e) {
-    console.log(e);
-  }
-
-  try {
-    var a2_on = (localStorage['a2_on'] == 'true');
-    var a2_tt = localStorage['a2_tt'] || DEFAULT_A2_TT;
-    var a2_ampm = localStorage['a2_ampm'] || DEFAULT_A2_AMPM;
-    if (a2_on) {
-      var alarmHoursMinutes = parseTime(a2_tt, a2_ampm);
-      var alarmHours = alarmHoursMinutes[0];
-      var alarmMinutes = alarmHoursMinutes[1];
-      a2Timer = setTimer(alarmHours, alarmMinutes);
-    }
-  } catch (e) {
-    console.log(e);
-  }
-
-  if (a1_on || a2_on) {
-    chrome.browserAction.setIcon({'path': 'clock-19.png'});
-  } else {
-    chrome.browserAction.setIcon({'path': 'clock-disabled-19.png'});
-  }
-}
-
-function onLocalStorageChange() {
-  resetTimers();
-}
-
-function initBackground() {
-  window.addEventListener('storage', onLocalStorageChange, false);
-
-  chrome.runtime.onConnect.addListener(function(popupPort) {
-    port = popupPort;
-    port.onDisconnect.addListener(function() {
-      port = null;
-    });
+  chrome.alarms.onAlarm.addListener(function( alarm ) {
+    console.log("Got an alarm!", alarm);
+    var date = new Date(alarm.scheduledTime);
+    ringingAlarms[alarm] = true;
+    alert("ALARM");
+    ringAlarm(date.getHours(), date.getMinutes());
   });
 }
 
+function timeToEpoch(hour, minute) {
+  var date = new Date();
+
+  // add a day
+  if ((date.getHours() > hour) ||
+      (date.getHours() == hour && date.getMinutes() > minute)) {
+    date.setDate(date.getDate() + 1)
+  }
+
+  date.setMinutes(minute);
+  date.setHours(hour);
+  date.setSeconds(0);
+  date.setMilliseconds(0);
+  return date;
+}
+
+function initBackground() {
+  addMessageListeners();
+}
+
+/*
+if (annyang) {
+  // Let's define our first command. First the text we expect, and then the function it should call
+  var commands = {
+    'off': function() {
+      stopAll();
+
+      for (var alarm in ringingAlarms) {
+        chrome.alarms.clear(alarm, function(wasCleared) {
+          console.log("Alarm " + alarm + " was deleted = " + wasCleared);
+        });
+      });
+
+      alert("STOPPED!");
+    }
+  };
+  // Add our commands to annyang
+  annyang.addCommands(commands);
+
+  // Start listening. You can call this here, or attach this call to an event, button, etc.
+  annyang.start();
+}
+*/
+
 initBackground();
-resetTimers();

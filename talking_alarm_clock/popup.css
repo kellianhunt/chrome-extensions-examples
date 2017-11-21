@@ -1,0 +1,63 @@
+body {
+    margin-top: 0px;
+    margin-bottom: 40px;
+    padding: 2% 2%;
+}
+
+html {
+    position: relative;
+}
+
+#main {
+    width: 300px;
+    font-family: arial, helvetica, sans-serif;
+    font-size: 13;
+}
+#clock {
+    cursor: pointer;
+}
+
+button.active {
+    background-color: green !important;
+}
+
+.alarm_container {
+    padding: 2px 10px;
+}
+
+.alarm-name {
+    background:rgba(0,0,0,0);
+    border:none;
+}
+
+.alarm {
+    margin-bottom: 6%;
+}
+
+#alarm-area {
+    margin-bottom: 6%;
+}
+
+#alarm-list {
+    margin-bottom: 8%;
+}
+
+.voice_options div {
+    margin-bottom: 4%;
+}
+
+#phrase {
+    float: left;
+    width: 160px;
+}
+
+#playspeech {
+    padding: 5px;
+    margin: 5px;
+}
+
+#current_time {
+    font-family: Nova Mono;
+    font-size: 24;
+    height: 32px;
+}
