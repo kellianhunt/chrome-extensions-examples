@@ -10,32 +10,7 @@ var currentClockImage;
 var port;
 var alarmCount = 1;
 
-function updateEnabledStatus(alarm) {
-  var enabled = $('a' + alarm + '_on').checked;
-  $('a' + alarm + '_tt').disabled = !enabled;
-  $('a' + alarm + '_ampm').disabled = !enabled;
-  var valid = true;
-  try {
-    var tt = $('a' + alarm + '_tt').value;
-    var ampm = $('a' + alarm + '_ampm').selectedIndex;
-    parseTime(tt, ampm);
-  } catch (x) {
-    valid = false;
-  }
-  if (valid) {
-    $('a' + alarm + '_wrap').removeAttribute('aria-invalid');
-  } else {
-    $('a' + alarm + '_wrap').setAttribute('aria-invalid', 'true');
-  }
-  if (enabled) {
-    $('a' + alarm + '_wrap').classList.remove('disabled');
-  } else {
-    $('a' + alarm + '_wrap').classList.add('disabled');
-  }
-}
-
 function loadAllImages() {
-  var loadCount = 0;
   var img = new Image();
   img.onload = function() {
     blankClockImage = img;
@@ -190,6 +165,9 @@ function addOutlineStyleListeners() {
 }
 
 function createNewAlarm() {
+  /**
+   * Create a new alarm element.
+   */
   var newAlarm = jQuery("#alarm-template").clone(true);
   newAlarm.attr("id","alarm-" + alarmCount);
 
@@ -199,91 +177,107 @@ function createNewAlarm() {
 }
 
 function getAlarmTimes() {
-  var timeArray = [];
+  /**
+   * Get the times from every alarm in the UI.
+   * @type {Array} Array of alarm times
+   */
+  var time_array = [];
   jQuery('input.alarm-time').each(function() {
-    timeArray.push(this.value);
+    time_array.push(this.value);
   });
-  return timeArray;
+  return time_array;
 }
 
 function getClosestAlarm(alarmField) {
+  /**
+   * Find the closest alarm element - this will be the parent container.
+   */
   return jQuery(alarmField).closest('.alarm')
 }
 
-function getClosestAlarmTime(alarmField) {
-  console.log(jQuery(alarmField).closest('.alarm-time'));
-  return jQuery(alarmField).closest('.alarm-time')
-}
-
 function initializeAlarmList() {
-  //chrome.storage.sync.clear();
+  /**
+   * Initialize the alarm UI with all previously created alarms.
+   */
+  // chrome.storage.sync.clear(); // clear local storage for debugging purposes
+
+  // Get saved UI elements/details from local storage
   chrome.storage.sync.get(['alarm_count', 'alarm_list', 'alarm_times'], function(result) {
-    console.log(result.alarm_count);
+    // If alarm_list is undefined, this is the first time a user is using the UI
     if (result.alarm_list == null) {
-      console.log("it was undefined");
-      var newAlarm = createNewAlarm();
-      jQuery("#alarm-list").append(newAlarm);
-      var listHTML = jQuery("#alarm-list").html();
-      chrome.storage.sync.set({
+      console.log("Initializing alarm UI for the first time.");
+      var newAlarm = createNewAlarm();              // Create a single default alarm
+      jQuery("#alarm-list").append(newAlarm);       // Add alarm to the UI
+      var listHTML = jQuery("#alarm-list").html();  // Get the html from the alarm-list
+      chrome.storage.sync.set({                     // Save the updated alarm-list to local storage
         'alarm_count': 1,
         'alarm_list': listHTML,
         'alarm_times': [jQuery(".alarm-time").val()]
       }, function() {
-        console.log("Alarm list HTML successfully initialized.");
+        console.log("Alarm list HTML successfully stored.");
       });
     } else {
+      // Otherwise, the alarm list had already been initialized and we can reload the previous list
       alarmCount = result.alarm_count;
-      var listHTML = result.alarm_list;
+      var list_HTML = result.alarm_list;
       var times = result.alarm_times;
 
-      jQuery("#alarm-list").html(listHTML);
+      jQuery("#alarm-list").html(list_HTML); // set the list HTML to the previous HTML
       jQuery(".alarm-time").each(function(index, alarm) {
-        console.log("::" + times[index] + "::");
+        // Re-add all the alarm times to each alarm element
         alarm.value = times[index];
         if (times[index] != null && times[index] != "") {
+          // If the alarm has a valid time, enable the "ON" button
           getClosestAlarm(jQuery(alarm)).find('.alarm-toggle').removeClass('disabled');
         }
       });
     }
 
+    // Add the "ON" button listener to all alarm-toggle buttons
     jQuery('button.alarm-toggle').click(function(){
+      // If the button is disabled, do nothing
       if(jQuery(this).hasClass('disabled')) {
         return false;
       }
+      // Else, on click, toggle the active class to mark the button as ON or OFF
       jQuery(this).toggleClass("active");
+      // Save the updated HTML with the active class added to this alarm
       chrome.storage.sync.set({
         'alarm_list': jQuery("#alarm-list").html(),
         'alarm_count': alarmCount
       }, function() {
         // Notify that we saved.
-        console.log('Alarm successfully added');
+        console.log('Alarm ON/OFF updated.');
       });
 
-
+      // If toggling the button added the active class, the user has turned the alarm ON
       if (jQuery(this).hasClass('active')) {
-        var alarm_id = getClosestAlarm(this).attr('id');
-        console.log(alarm_id);
-        console.log(jQuery('#' + alarm_id + ' .alarm-time'));
+        var alarm_id = getClosestAlarm(this).attr('id'); // get alarm id of parent alarm element
 
+        // Send a message to the background script that we want to activate an alarm
         chrome.runtime.sendMessage({
           msg: "activate_alarm",
           alarm_id: alarm_id,
           alarm_time: jQuery('#' + alarm_id + ' .alarm-time').val()
         });
       } else {
-        var alarm_id = getClosestAlarm(this).attr('id');
+        // If toggling the button removed the active class, the user has turned the alarm OFF
+        var alarm_id = getClosestAlarm(this).attr('id');  // get alarm id of parent alarm element
+        // Send a message to the background script that we want to remove an alarm
         chrome.runtime.sendMessage({
           msg: "delete_alarm",
           alarm_id: alarm_id,
           alarm_time: jQuery('#' + alarm_id + ' .alarm-time').val()
         });
       }
-
       return false;
     });
 
+    // Add listeners to the alarm delete button
     jQuery('button.alarm-delete').click(function() {
-      var alarm_id = getClosestAlarm(jQuery(this)).attr('id');
+      var alarm_id = getClosestAlarm(jQuery(this)).attr('id');  // get alarm id of parent alarm element
+
+      // If the deleted alarm was ON, send a message to the background script to delete the alarm
       if (jQuery('#' + alarm_id + ' .alarm-toggle').hasClass('active')) {
         chrome.runtime.sendMessage({
           msg: "delete_alarm",
@@ -292,38 +286,41 @@ function initializeAlarmList() {
         });
       }
 
-      jQuery(this).closest('.alarm').remove();
+      jQuery(this).closest('.alarm').remove(); // remove the alarm HTML element
 
+      // Update the stored alarm-list HTML and times
       chrome.storage.sync.set({
         'alarm_list': jQuery("#alarm-list").html(),
         'alarm_count': alarmCount,
         'alarm_times': getAlarmTimes()
       }, function() {
-        // Notify that we saved.
-        console.log('Alarm successfully deleted');
+        console.log('Alarm ' + alarm_id + ' successfully deleted');
       });
 
       return false;
     });
 
+    // Add listener to create alarm button
     jQuery('button.alarm-create').click(function() {
       var newAlarm = createNewAlarm();
-      jQuery("#alarm-list").append(newAlarm);
+      jQuery("#alarm-list").append(newAlarm); // append the new alarm to the UI
 
+      // Update the stored alarm-list HTML and times
       chrome.storage.sync.set({
         'alarm_list': jQuery("#alarm-list").html(),
         'alarm_count': alarmCount
       }, function() {
-        // Notify that we saved.
-        console.log('Alarm successfully added');
+        console.log('New alarm created');
       });
 
       return false;
     });
 
+    // Add listener to alarm-time input element
     jQuery('input.alarm-time').on('input', function() {
       var timeArray = getAlarmTimes();
 
+      // Update the alarm times array in storage
       chrome.storage.sync.set({
         'alarm_list': jQuery("#alarm-list").html(),
         'alarm_times': timeArray
@@ -332,14 +329,19 @@ function initializeAlarmList() {
         console.log('Alarm successfully changed');
       });
 
+      // Find the closest alarm element, get the toggle button, and enable the ON button
+      // if time is valid.
       var alarm_id = getClosestAlarm(this).attr('id');
       var toggle_button = jQuery('#' + alarm_id + ' .alarm-toggle');
       if (jQuery(this).val() != "") {
+        // If time was changed to something valid, remove disabled class
         toggle_button.removeClass('disabled');
       } else {
+        // If time was changed to something invalid, add disabled class
         toggle_button.addClass('disabled');
       }
 
+      // If the button was ON=
       if (toggle_button.hasClass('active')) {
         chrome.runtime.sendMessage({
           msg: "activate_alarm",
@@ -373,18 +375,6 @@ function load() {
   updateCurrentTime();
   setInterval(updateCurrentTime, 250);
 
-  function updateTime(timeElement) {
-    if (!parseTime(timeElement.value)) {
-      return false;
-    }
-
-    timeElement.valueAsNumber =
-    timeElement.valueAsNumber % (12 * 60 * 60 * 1000);
-    if (timeElement.valueAsNumber < (1 * 60 * 60 * 1000))
-      timeElement.valueAsNumber += (12 * 60 * 60 * 1000);
-    return true;
-  }
-
   $('clock').addEventListener('click', function(evt) {
     if (isPlaying || isSpeaking || isAnimating) {
       stopAll();
@@ -405,7 +395,6 @@ function load() {
   initializeAlarmList();
 
   // Phrase
-
   var phrase = localStorage['phrase'] || DEFAULT_PHRASE;
   $('phrase').value = phrase;
   $('phrase').addEventListener('change', function(evt) {
@@ -413,7 +402,6 @@ function load() {
   }, false);
 
   // Speech parameters
-
   var rateElement = $('rate');
   var volumeElement = $('volume');
   var rate = localStorage['rate'] || DEFAULT_RATE;

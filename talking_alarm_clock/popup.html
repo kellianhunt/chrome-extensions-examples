@@ -9,7 +9,6 @@
   <link href="third-party/bootstrap.min.css" rel="stylesheet" type="text/css">
   <script src="third-party/jquery-3.2.1.min.js"></script>
   <script src="third-party/bootstrap.min.js"></script>
-  <script src="//cdnjs.cloudflare.com/ajax/libs/annyang/2.6.0/annyang.min.js"></script>
 
   <script src="common.js"></script>
   <script src="popup.js"></script>
@@ -34,13 +33,13 @@
             </span>
             <input type="time" class="form-control input-lg alarm-time">
             <span class="input-group-btn">
-            <button class="btn btn-default btn-lg alarm-delete" type="submit">X</button>
+            <button class="btn btn-danger btn-lg alarm-delete" type="submit">X</button>
           </span>
           </div>
         </div>
       </div>
     </div>
-    <button class="btn btn-default btn-lg alarm-create" type="submit">New Alarm</button>
+    <button class="btn btn-success btn-lg alarm-create" type="submit">New Alarm</button>
   </div>
 
   <div class="voice_options">
@@ -55,15 +54,17 @@
         <option value="rooster">Rooster</option>
       </select>
       <span class="input-group-btn">
-        <button type="button" class="btn btn-default btn-lg" id="playsound" title="Play Sound">
+        <button type="button" class="btn btn-success btn-lg" id="playsound" title="Play Sound">
           Play
         </button>
       </span>
     </div>
 
-    <label for="phrase">Phrase (use $TIME to say time):</label>
-    <textarea id="phrase"></textarea><br>
-    <button id="playspeech" title="Play Speech" class="btn btn-default btn-lg">
+    <div class="form-group">
+      <label for="phrase">Phrase (use $TIME to say time):</label>
+      <textarea id="phrase" class="form-control"></textarea>
+    </div>
+    <button id="playspeech" title="Play Speech" class="btn btn-success btn-lg">
       Play
     </button>
 

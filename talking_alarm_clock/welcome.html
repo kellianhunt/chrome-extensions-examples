@@ -1,3 +1,26 @@
-Welcome! The Talking Clock extension needs access to your microphone.
-
-<script src="microphone.js"></script>
+<html>
+<head>
+    <!-- bootstrap and jquery links -->
+    <link href="third-party/bootstrap.min.css" rel="stylesheet" type="text/css">
+    <script src="third-party/jquery-3.2.1.min.js"></script>
+    <script src="third-party/bootstrap.min.js"></script>
+    <script src="microphone.js"></script>
+</head>
+<body>
+    <div class="container">
+        <div class="jumbotron">
+            <h1>Welcome to The Talking Alarm!</h1>
+            <p>The Talking Clock Extension allows you to create alarms with
+                customizable sounds and turn off alarms with the voice command "OFF".
+            </p>
+            <hr class="my-4">
+            <p>To enable voice commands, the alarm extension will need access to your microphone.
+                If a popup requesting permission did not appear upon opening this page, check
+                for a little camera symbol on the far right of your search bar. Click this symbol
+                and allow the extension to use your microphone.
+            </p>
+            <p>To test voice commands, create an alarm, and when it rings, say "Off" to your device.</p>
+        </div>
+    </div>
+</body>
+</html>

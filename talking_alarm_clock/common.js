@@ -4,10 +4,6 @@
  * found in the LICENSE file.
  */
 
-var DEFAULT_A1_TT = '09:30';
-var DEFAULT_A1_AMPM = 0;
-var DEFAULT_A2_TT = '03:30';
-var DEFAULT_A2_AMPM = 1;
 var DEFAULT_RATE = 1.0;
 var DEFAULT_VOLUME = 1.0;
 var DEFAULT_PHRASE = 'It\'s $TIME, so get up!';
@@ -36,27 +32,17 @@ window.stopFlashingIcon = function() {
 };
 
 function $(id) {
+  /**
+   * The original Talking Clock developer wanted jQuery syntax
+   * without adding jQuery.
+   */
   return document.getElementById(id);
 }
 
-function parseTime(timeString, ampm) {
-  var time = timeString.match(/^(\d\d):(\d\d)$/);
-  if (!time) {
-    throw 'Cannot parse: ' + timeString;
-  }
-
-  var hours = parseInt(time[1], 10);
-  if (hours == 12 && ampm == 0) {
-    hours = 0;
-  } else {
-    hours += (hours < 12 && ampm == 1)? 12 : 0;
-  }
-  var minutes = parseInt(time[2], 10) || 0;
-
-  return [hours, minutes];
-}
-
 function stopAll() {
+  /**
+   * Stop all audio and the Talking Clock flashing icon
+   */
   if (audio) {
     audio.pause();
     isPlaying = false;
@@ -71,6 +57,9 @@ function stopAll() {
 }
 
 function playSound(duckAudio) {
+  /**
+   * Play the sound specified in the UI
+   */
   if (audio) {
     audio.pause();
     document.body.removeChild(audio);
@@ -108,6 +97,9 @@ function playSound(duckAudio) {
 }
 
 function getTimeString(hh, mm) {
+  /**
+   * Convert hours and minutes into an 'HH MM [AM|PM]' string
+   */
   var ampm = hh >= 12 ? 'P M' : 'A M';
   hh = (hh % 12);
   if (hh == 0)
@@ -121,10 +113,16 @@ function getTimeString(hh, mm) {
 }
 
 function speak(text) {
+  /**
+   * Use the Chrome TTS API to speak the phrase specified in the UI
+   */
+  // Get voice parameters from localStorage
   var rate = parseFloat(localStorage['rate']) || DEFAULT_RATE;
   var pitch = 1.0;
   var volume = parseFloat(localStorage['volume']) || DEFAULT_VOLUME;
   var voice = localStorage['voice'];
+
+  // Use the chrome TTS API to output sound
   chrome.tts.speak(
       text,
       {voiceName: voice,

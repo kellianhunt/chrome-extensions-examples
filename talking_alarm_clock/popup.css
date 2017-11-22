@@ -17,10 +17,6 @@ html {
     cursor: pointer;
 }
 
-button.active {
-    background-color: green !important;
-}
-
 .alarm_container {
     padding: 2px 10px;
 }
@@ -32,6 +28,12 @@ button.active {
 
 .alarm {
     margin-bottom: 6%;
+}
+
+.alarm-toggle.active {
+    color: #fff !important;
+    background-color: #5cb85c !important;
+    border-color: #4cae4c !important;
 }
 
 #alarm-area {
@@ -48,12 +50,12 @@ button.active {
 
 #phrase {
     float: left;
-    width: 160px;
+    width: 100%;
 }
 
 #playspeech {
     padding: 5px;
-    margin: 5px;
+    margin: 5px 0px;
 }
 
 #current_time {

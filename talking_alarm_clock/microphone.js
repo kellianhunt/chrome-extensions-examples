@@ -1,10 +1,3 @@
-navigator.getUserMedia(
-    {audio: true},
-    function(s){console.log("success!")},
-    function(e){console.log("got error " + e);}
-);
-
-
 /*
  *  Copyright (c) 2015 The WebRTC project authors. All Rights Reserved.
  *
@@ -14,9 +7,6 @@ navigator.getUserMedia(
  */
 
 'use strict';
-
-var errorElement = document.querySelector('#errorMsg');
-var video = document.querySelector('video');
 
 // Put variables in global scope to make them available to the browser console.
 var constraints = window.constraints = {

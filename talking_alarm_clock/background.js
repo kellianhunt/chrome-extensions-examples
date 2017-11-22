@@ -5,16 +5,22 @@
  */
 
 var iconFlashTimer = null;
-var ringingAlarms = {};
+var ringing_alarms = {};
 
 // Override from common.js
 window.stopFlashingIcon = function() {
+  /**
+   * Stop the clock extension icon flashing
+   */
   window.clearTimeout(iconFlashTimer);
   chrome.browserAction.setIcon({'path': 'clock-19.png'});
 };
 
 // Override from common.js
 window.flashIcon = function() {
+  /**
+   * Make the clock extension icon flash when an alarm is going off
+   */
   var flashes = 10;
   function flash() {
     if (flashes == 0) {
@@ -34,40 +40,67 @@ window.flashIcon = function() {
 };
 
 function addMessageListeners() {
+  /**
+   * Receive messages from popup.js or other scripts to create or delete alarms.
+   */
   chrome.runtime.onMessage.addListener(
       function(request, sender, sendResponse) {
+        // Delete an alarm
         if (request.msg === "delete_alarm") {
+          // Extract the alarm_id and clear it from the Chrome Alarms API
           var alarm_id = request.alarm_id;
           chrome.alarms.clear(alarm_id, function(wasCleared) {
-            console.log("Alarm " + alarm_id + " was deleted = " + wasCleared);
+            console.log("Was alarm " + alarm_id + " deleted? " + wasCleared);
           });
         }
+
+        // Create or change an alarm
         if (request.msg === "activate_alarm") {
+          // Extract requested alarm info
           var alarm_id = request.alarm_id;
           var alarm_time = request.alarm_time;
           var hour_minute = alarm_time.split(":");
           var hours = parseInt(hour_minute[0]);
           var mins = parseInt(hour_minute[1]);
-          var time_since_epoch = timeToEpoch(hours, mins);
+          var alarm_date = timeToEpoch(hours, mins); // Get a date object for the alarm
 
-          console.log("Alarm " + alarm_id + " has been activated for " + time_since_epoch.toLocaleString());
-          chrome.alarms.create(alarm_id, {when: time_since_epoch.getTime()});   //, periodInMinutes: 1});
+          chrome.alarms.create(
+              alarm_id, // Alarm name
+              { when: alarm_date.getTime() } // Alarm parameters
+          );   //, periodInMinutes: 1});
+          console.log("Alarm " + alarm_id + " has been activated for " + alarm_date.toLocaleString());
         }
+
+        // List active alarms
+        chrome.alarms.getAll(function(alarms) {
+          console.log("Current active alarms:");
+          alarms.map(function(alarm) {
+            var alarm_date = new Date(alarm.scheduledTime);
+            console.log("  " + alarm.name + " @ " + alarm_date.toLocaleString());
+          });
+        });
       }
   );
 
-  chrome.alarms.onAlarm.addListener(function( alarm ) {
+  // Add a listener for activated alarms; when it's time for an alarm
+  // to go off, the onAlarm callback will be activated and we can set off
+  // the ringer.
+  chrome.alarms.onAlarm.addListener(function(alarm) {
     console.log("Got an alarm!", alarm);
     var date = new Date(alarm.scheduledTime);
-    ringingAlarms[alarm] = true;
-    ringAlarm(date.getHours(), date.getMinutes());
+    ringing_alarms[alarm] = true; // add the alarm to a list of ringing alarms
+    ringAlarm(date.getHours(), date.getMinutes()); // activate the ringer
   });
 }
 
 function timeToEpoch(hour, minute) {
+  /**
+   * Create a date object for the time an alarm should ring.
+   * @type {Date} A Date object for the time/date of an alarm
+   */
   var date = new Date();
 
-  // add a day
+  // This time has passed today; add a day to date to ring alarm tomorrow
   if ((date.getHours() > hour) ||
       (date.getHours() == hour && date.getMinutes() > minute)) {
     date.setDate(date.getDate() + 1)
@@ -80,41 +113,73 @@ function timeToEpoch(hour, minute) {
   return date;
 }
 
+var offCommand = function() {
+  /**
+   * When the extension hears the voice command "OFF", stop all ringing alarms.
+   */
+  console.log("received OFF command");
+
+  // Remove all ringing alarms from alarm API so they don't repeat after the
+  // specified period
+  for (const alarm_id in ringing_alarms) {
+    chrome.alarms.clear(alarm_id, function(wasCleared) {
+      console.log("Stopped and cleared " + alarm_id + " == " + wasCleared);
+    });
+  }
+  ringing_alarms = {}; // reset the ringing_alarms object
+  stopAll();           // stop all sounds
+}
+
+function openWelcomePage() {
+  /**
+   * Redirect to the welcome.html page once when the extension is installed.
+   * This page will give the alarm access to the user's microphone.
+   */
+  chrome.runtime.onInstalled.addListener(function(details) {
+    // If the extension was already installed, do nothing and return.
+    if (details.reason.search(/install/g) === -1) {
+      return;
+    }
+
+    // If this is the first time a user has enabled the extension,
+    // open a new tab for the welcome page to request microphone permission.
+    chrome.tabs.create({
+      url: chrome.extension.getURL("welcome.html"),
+      active: true
+    });
+  });
+}
+
+function enableVoiceRecognition() {
+  /**
+   * Enable a voice recognition module to respond to vocal commands.
+   */
+  // If the browser supports annyang, enable it
+  if (annyang) {
+    // Create a commands object with string commands and callback functions
+    var commands = {
+      'off': offCommand
+    }
+
+    // enter debug mode -- TODO find a way to disable this if not in developer mode
+    annyang.debug();
+    // Add our commands to annyang
+    annyang.addCommands(commands);
+
+    // Start listening. You can call this here, or attach this call to an event, button, etc.
+    annyang.start();
+    console.log("annyang voice recognition initialized");
+  }
+}
+
 function initBackground() {
+  /**
+   * Initialize the background script. This script will be re-run each time an extension
+   * is reloaded.
+   */
+  openWelcomePage();
+  enableVoiceRecognition();
   addMessageListeners();
 }
-
-chrome.runtime.onInstalled.addListener(function(details) {
-  if (details.reason.search(/install/g) === -1) {
-    return;
-  }
-  chrome.tabs.create({
-    url: chrome.extension.getURL("welcome.html"),
-    active: true
-  });
-});
-
-var offCommand = function() {
-  console.log("received OFF command");
-  stopAll();
-}
-
-
-if (annyang) {
-  // Let's define our first command. First the text we expect, and then the function it should call
-  var commands = {
-    'off': offCommand
-  }
-
-  annyang.debug();
-  // Add our commands to annyang
-  // annyang.addCommands(commands);
-  annyang.addCommands(commands);
-
-  // Start listening. You can call this here, or attach this call to an event, button, etc.
-  annyang.start();
-  console.log("annyang voice recognition initialized");
-}
-
 
 initBackground();
