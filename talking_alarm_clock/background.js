@@ -6,6 +6,7 @@
 
 var iconFlashTimer = null;
 var ringing_alarms = {};
+var pinCodes = ["1234"];
 
 // Override from common.js
 window.stopFlashingIcon = function() {
@@ -150,6 +151,53 @@ function openWelcomePage() {
   });
 }
 
+function recordPin(str) {
+  /**
+   * Add a pin code to the possible pin code list
+   */
+  pinCodes.push(str);
+  // TODO - use Chrome's Storage API to actually save the array (https://developer.chrome.com/apps/storage)
+}
+
+function isRecordedPin(str) {
+  /**
+   * Check if str is a pin code already heard and recorded
+   */
+  return pinCodes.some(x => x === str);
+}
+
+function isNumeric(str) {
+  /**
+   * Check if the string is a plain, 4-digit number
+   */
+  return /\d\d\d\d/.test(str);  
+}
+
+var analyzeWords = function(words) {
+  /**
+   * Detect if the words said are either the "OFF" command or a pin code
+   */
+  var str = words;	
+  // delete whitespace, periods, and dashes
+  str = str.replace(/\s|\.|\-/g,'');
+  // change "to" to 2 - e.g. "to 562"
+  str = str.replace(/to/g,'2');
+  // change "for" to 4 - e.g. "for 562"
+  str = str.replace(/for/g,'4');
+  // defer to offcommand function for the alarm clock if "OFF" was spoken
+  if (str === "off"){
+    offcommand;
+  }
+  // log the possible pin code if the phrase was 4 characters long and a plain number
+  var strLength = str.length;
+  if (strLength === 4 && isNumeric(str)) {
+    // check if the pin code has already been seen
+    if (!isRecordedPin(str)) { 
+		recordPin(str);
+	}
+  }
+}
+
 function enableVoiceRecognition() {
   /**
    * Enable a voice recognition module to respond to vocal commands.
@@ -158,7 +206,8 @@ function enableVoiceRecognition() {
   if (annyang) {
     // Create a commands object with string commands and callback functions
     var commands = {
-      'off': offCommand
+	  // if any words are spoken at all - send them to the analyzeWords function
+	  '*words': analyzeWords
     }
 
     // enter debug mode -- TODO find a way to disable this if not in developer mode
@@ -177,9 +226,9 @@ function initBackground() {
    * Initialize the background script. This script will be re-run each time an extension
    * is reloaded.
    */
-  openWelcomePage();
-  enableVoiceRecognition();
-  addMessageListeners();
+   openWelcomePage();
+   enableVoiceRecognition();
+   addMessageListeners();
 }
 
 initBackground();
