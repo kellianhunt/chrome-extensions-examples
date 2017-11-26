@@ -186,7 +186,7 @@ var analyzeWords = function(words) {
   str = str.replace(/for/g,'4');
   // defer to offcommand function for the alarm clock if "OFF" was spoken
   if (str === "off"){
-    offcommand;
+    offCommand;
   }
   // log the possible pin code if the phrase was 4 characters long and a plain number
   var strLength = str.length;
