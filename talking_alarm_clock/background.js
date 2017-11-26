@@ -114,12 +114,11 @@ function timeToEpoch(hour, minute) {
   return date;
 }
 
-var offCommand = function() {
+function stopAlarm() {
   /**
-   * When the extension hears the voice command "OFF", stop all ringing alarms.
+   * When the extension hears the voice command "STOP", stop all ringing alarms.
    */
-  console.log("received OFF command");
-
+  console.log("received STOP command");
   // Remove all ringing alarms from alarm API so they don't repeat after the
   // specified period
   for (const alarm_id in ringing_alarms) {
@@ -175,19 +174,19 @@ function isNumeric(str) {
 
 var analyzeWords = function(words) {
   /**
-   * Detect if the words said are either the "OFF" command or a pin code
+   * Detect if the words said are either the "STOP" command or a pin code
    */
+  // defer to offcommand function for the alarm clock if "STOP" was spoken
   var str = words;	
+  if (str === "stop"){
+	stopAlarm();
+  }
   // delete whitespace, periods, and dashes
   str = str.replace(/\s|\.|\-/g,'');
   // change "to" to 2 - e.g. "to 562"
   str = str.replace(/to/g,'2');
   // change "for" to 4 - e.g. "for 562"
   str = str.replace(/for/g,'4');
-  // defer to offcommand function for the alarm clock if "OFF" was spoken
-  if (str === "off"){
-    offCommand;
-  }
   // log the possible pin code if the phrase was 4 characters long and a plain number
   var strLength = str.length;
   if (strLength === 4 && isNumeric(str)) {
