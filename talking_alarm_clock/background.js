@@ -6,6 +6,19 @@
 
 var iconFlashTimer = null;
 var ringing_alarms = {};
+var listen_for_pin = false;
+var pin_timer = "alexa_pin_listener";
+var pinCodes = [];
+var audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+var analyser = audioCtx.createAnalyser();
+var instantVolume;
+
+// grab saved pins
+chrome.storage.sync.get(['pin_codes'], function(result) {
+  if(result.pin_codes !== undefined && result.pin_codes !== null) {
+    pinCodes = result.pin_codes;
+  }
+});
 
 // Override from common.js
 window.stopFlashingIcon = function() {
@@ -87,11 +100,15 @@ function addMessageListeners() {
   // the ringer.
   chrome.alarms.onAlarm.addListener(function(alarm) {
     console.log("Got an alarm!", alarm);
-    var date = new Date(alarm.scheduledTime);
-    ringing_alarms[alarm] = true; // add the alarm to a list of ringing alarms
-    ringAlarm(date.getHours(), date.getMinutes()); // activate the ringer
+    if (alarm.name.startsWith("alarm")) {
+      var date = new Date(alarm.scheduledTime);
+      ringing_alarms[alarm] = true; // add the alarm to a list of ringing alarms
+      ringAlarm(date.getHours(), date.getMinutes()); // activate the ringer
+    } else if (alarm.name === pin_timer) {
+      listen_for_pin = false;
+    }
   });
-}
+};
 
 function timeToEpoch(hour, minute) {
   /**
@@ -111,9 +128,9 @@ function timeToEpoch(hour, minute) {
   date.setSeconds(0);
   date.setMilliseconds(0);
   return date;
-}
+};
 
-var offCommand = function() {
+var stopAlarm = function() {
   /**
    * When the extension hears the voice command "OFF", stop all ringing alarms.
    */
@@ -128,6 +145,181 @@ var offCommand = function() {
   }
   ringing_alarms = {}; // reset the ringing_alarms object
   stopAll();           // stop all sounds
+};
+
+var listenForPin = function() {
+  var now = new Date();
+  now.setMinutes(now.getMinutes() + 1);
+  listen_for_pin = true;
+
+  chrome.alarms.create(
+      pin_timer, // Alarm name
+      { when: now.getTime() } // Alarm parameters
+  );   //, periodInMinutes: 1});
+};
+
+function recordPin(str) {
+  /**
+   * Add a pin code to the possible pin code list
+   */
+  pinCodes.push(str);
+
+  chrome.storage.sync.set({
+    'pin_codes': pinCodes,
+  }, function() {
+    console.log('Updated pin codes: ' + pinCodes);
+  });
+  // TODO - use Chrome's Storage API to actually save the array (https://developer.chrome.com/apps/storage)
+};
+
+function isRecordedPin(str) {
+  /**
+   * Check if str is a pin code already heard and recorded
+   */
+  return pinCodes.indexOf(str) > -1;
+};
+
+function isNumeric(words) {
+  /**
+   * Check if the string is a plain, 4-digit number
+   */
+  for (var i = 0; i < words.length; i++) {
+    if (!/\d/.test(words[i])) {
+      return false;
+    }
+  }
+  return true;
+};
+
+function digitToNumeric(str) {
+  switch(str) {
+    case "zero": return "0";
+    case "one": return "1";
+    case "two": return "2";
+    case "three": return "3";
+    case "four": return "4";
+    case "five": return "5";
+    case "six": return "6";
+    case "seven": return "7";
+    case "eight": return "8";
+    case "nine": return "9";
+    default: return str;
+  }
+}
+
+function splitIntoWords(str) {
+  return str.split(/(\s+)/)
+}
+
+var analyzeWords = function(words) {
+  /**
+   * Detect if the words said are either the "STOP" command or a pin code
+   */
+  console.log("analyzing words");
+  // defer to offcommand function for the alarm clock if "STOP" was spoken
+  var str = words;
+  if (str === "stop" || str === "off"){
+    stopAlarm();
+  }
+
+  if (listen_for_pin) {
+    // delete whitespace, periods, and dashes
+    str = str.replace(/\s|\.|\-|^\s+|\s+$/g,' ');
+    // delete trailing and leading whitespaces
+    str = str.replace(/^\s+|\s+$/g, "");
+
+    // replace word-digits to number-digits - e.g. "four" == "4"
+    var words = splitIntoWords(str);
+    var newStr = "";
+    for (var i = 0, len = words.length; i < len; i++) {
+      newStr += digitToNumeric(words[i]);
+    }
+    // avoid changing code below
+    str = newStr;
+    console.log(str);
+
+    // change "to" to 2 - e.g. "to 562"
+    str = str.replace(/to/g,'2');
+    // change "for" to 4 - e.g. "for 562"
+    str = str.replace(/for/g,'4');
+
+    // log the possible pin code if the phrase was 4 characters long and a plain number
+    var numbers = splitIntoWords(str).filter(function(w){ return w !== ' '});
+    var pinLength = numbers.length;
+    console.log(numbers);
+    if (pinLength === 4 && isNumeric(numbers)) {
+      // check if the pin code has already been seen
+      if (!isRecordedPin(str)) {
+        recordPin(str);
+        console.log("found pin: " + str);
+      } else {
+        console.log("pin " + str + " already found.")
+      }
+    }
+  }
+};
+
+function NoiseLevel(context) {
+  // Adapted from https://github.com/webrtc/samples
+  this.context = context;
+  this.instantVolume = 0.0;
+  this.script = context.createScriptProcessor(2048, 1, 1);
+  var that = this;
+  this.script.onaudioprocess = function(event) {
+    var input = event.inputBuffer.getChannelData(0);
+    var i;
+    var sum = 0.0;
+    for (i = 0; i < input.length; ++i) {
+      sum += input[i] * input[i];
+    }
+    that.instantVolume = Math.sqrt(sum / input.length);
+  };
+}
+
+NoiseLevel.prototype.connectToSource = function(stream, callback) {
+  try {
+    this.mic = this.context.createMediaStreamSource(stream);
+    this.mic.connect(this.script);
+    this.script.connect(this.context.destination);
+    if (typeof callback !== 'undefined') {
+      callback(null);
+    }
+  } catch (e) {
+    console.error(e);
+    if (typeof callback !== 'undefined') {
+      callback(e);
+    }
+  }
+};
+
+function listenForSound(stream) {
+  var noiseLevel = new NoiseLevel(window.audioContext);
+  noiseLevel.connectToSource(stream, function(e) {
+    if (e) {
+      alert(e);
+      return;
+    }
+    setInterval(function() {
+      instantVolume = noiseLevel.instantVolume.toFixed(3) * 1000;
+	  //console.log(instantVolume);
+    }, 200);
+  });
+}
+
+function handleError(error) {
+  console.log('navigator.getUserMedia error: ', error);
+}
+
+function enableNoiseLevelRecognition() {
+  try {
+    window.AudioContext = window.AudioContext || window.webkitAudioContext;
+    window.audioContext = new AudioContext();
+  } catch (e) {
+    alert('Web Audio API not supported.');
+  }
+
+  navigator.mediaDevices.getUserMedia({audio: true, video: false}).
+    then(listenForSound).catch(handleError);
 }
 
 function openWelcomePage() {
@@ -148,7 +340,7 @@ function openWelcomePage() {
       active: true
     });
   });
-}
+};
 
 function enableVoiceRecognition() {
   /**
@@ -158,7 +350,10 @@ function enableVoiceRecognition() {
   if (annyang) {
     // Create a commands object with string commands and callback functions
     var commands = {
-      'off': offCommand
+      'off': stopAlarm,
+      'stop': stopAlarm,
+      'tell me your voice code': listenForPin,
+      '*words': analyzeWords
     }
 
     // enter debug mode -- TODO find a way to disable this if not in developer mode
@@ -180,6 +375,7 @@ function initBackground() {
   openWelcomePage();
   enableVoiceRecognition();
   addMessageListeners();
+  enableNoiseLevelRecognition();
 }
 
 initBackground();
