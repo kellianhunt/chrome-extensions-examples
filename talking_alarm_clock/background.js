@@ -212,9 +212,9 @@ function splitIntoWords(str) {
 }
 
 function pingAlexa(){
-	isTalkingToAlexa = true;
-	console.log("starting to ping Alexa...");
-	isTalkingToAlexa = false;
+  isTalkingToAlexa = true;
+  console.log("starting to ping Alexa...");
+  isTalkingToAlexa = false;
 }
 
 var analyzeWords = function(words) {
@@ -312,13 +312,13 @@ function listenForNoiseLevel(stream) {
     }
     setInterval(function() {
       instantVolume = noiseLevel.instantVolume.toFixed(3) * 1000;
-	  //console.log(instantVolume);
-	  instantVolume === 0 ? silentTime++ : silentTime = 0;
-	  // if the room has been silent for 1 minute and we are not already talking to Alexa, ping her
+      //console.log(instantVolume);
+      instantVolume === 0 ? silentTime++ : silentTime = 0;
+      // if the room has been silent for 1 minute and we are not already talking to Alexa, ping her
 	  if (silentTime === 300 && !isTalkingToAlexa) {
         silentTime = 0;
         pingAlexa(); 
-	  };
+      };
     }, 200);
   });
 }
