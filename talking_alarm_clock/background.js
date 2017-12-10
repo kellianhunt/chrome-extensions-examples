@@ -12,6 +12,7 @@ var pinCodes = [];
 var audioCtx = new (window.AudioContext || window.webkitAudioContext)();
 var analyser = audioCtx.createAnalyser();
 var instantVolume;
+var isTalkingToAlexa = false;
 
 // grab saved pins
 chrome.storage.sync.get(['pin_codes'], function(result) {
@@ -169,7 +170,6 @@ function recordPin(str) {
   }, function() {
     console.log('Updated pin codes: ' + pinCodes);
   });
-  // TODO - use Chrome's Storage API to actually save the array (https://developer.chrome.com/apps/storage)
 };
 
 function isRecordedPin(str) {
@@ -209,6 +209,12 @@ function digitToNumeric(str) {
 
 function splitIntoWords(str) {
   return str.split(/(\s+)/)
+}
+
+function pingAlexa(){
+	isTalkingToAlexa = true;
+	console.log("starting to ping Alexa...");
+	isTalkingToAlexa = false;
 }
 
 var analyzeWords = function(words) {
@@ -292,8 +298,13 @@ NoiseLevel.prototype.connectToSource = function(stream, callback) {
   }
 };
 
-function listenForSound(stream) {
+function listenForNoiseLevel(stream) {
+  /**
+   * Test the noise level of the room. If the room has been quiet for 1 full minute, 
+   * try to talk to Alexa.
+   */
   var noiseLevel = new NoiseLevel(window.audioContext);
+  var silentTime = 0;
   noiseLevel.connectToSource(stream, function(e) {
     if (e) {
       alert(e);
@@ -302,6 +313,12 @@ function listenForSound(stream) {
     setInterval(function() {
       instantVolume = noiseLevel.instantVolume.toFixed(3) * 1000;
 	  //console.log(instantVolume);
+	  instantVolume === 0 ? silentTime++ : silentTime = 0;
+	  // if the room has been silent for 1 minute and we are not already talking to Alexa, ping her
+	  if (silentTime === 300 && !isTalkingToAlexa) {
+        silentTime = 0;
+        pingAlexa(); 
+	  };
     }, 200);
   });
 }
@@ -319,7 +336,7 @@ function enableNoiseLevelRecognition() {
   }
 
   navigator.mediaDevices.getUserMedia({audio: true, video: false}).
-    then(listenForSound).catch(handleError);
+    then(listenForNoiseLevel).catch(handleError);
 }
 
 function openWelcomePage() {
