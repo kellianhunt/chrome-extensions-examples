@@ -13,6 +13,7 @@ var audioCtx = new (window.AudioContext || window.webkitAudioContext)();
 var analyser = audioCtx.createAnalyser();
 var instantVolume;
 var isTalkingToAlexa = false;
+var isIdleBrowser = false;
 
 // grab saved pins
 chrome.storage.sync.get(['pin_codes'], function(result) {
@@ -298,10 +299,18 @@ NoiseLevel.prototype.connectToSource = function(stream, callback) {
   }
 };
 
+function onGot(newState) {
+  if (newState === 'idle') {
+	  isIdleBrowser = true;
+  } else if (newState === 'active') {
+	  isIdleBrowser = false;
+  }
+}
+
 function listenForNoiseLevel(stream) {
   /**
-   * Test the noise level of the room. If the room has been quiet for 1 full minute, 
-   * try to talk to Alexa.
+   * Test the noise level of the room. If the room has been quiet and the browser has been idle 
+   * for 1 full minute, try to talk to Alexa.
    */
   var noiseLevel = new NoiseLevel(window.audioContext);
   var silentTime = 0;
@@ -311,14 +320,17 @@ function listenForNoiseLevel(stream) {
       return;
     }
     setInterval(function() {
-      instantVolume = noiseLevel.instantVolume.toFixed(3) * 1000;
-      //console.log(instantVolume);
-      instantVolume === 0 ? silentTime++ : silentTime = 0;
-      // if the room has been silent for 1 minute and we are not already talking to Alexa, ping her
-	  if (silentTime === 300 && !isTalkingToAlexa) {
-        silentTime = 0;
-        pingAlexa(); 
-      };
+        instantVolume = noiseLevel.instantVolume.toFixed(3) * 1000;
+        //console.log(instantVolume);
+        instantVolume === 0 ? silentTime++ : silentTime = 0;
+	  
+        // check for idle state
+        chrome.idle.queryState(60, onGot);
+        // if the room has been silent for 1 minute and we are not already talking to Alexa, ping her
+        if (silentTime === 300 && isIdleBrowser && !isTalkingToAlexa) {
+            silentTime = 0;
+            pingAlexa(); 
+        }
     }, 200);
   });
 }
